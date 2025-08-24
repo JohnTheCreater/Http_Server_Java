@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.*;
 
@@ -20,7 +20,7 @@ public class Server {
     public Server(int port) throws IOException {
 
         serverSocket = new ServerSocket(port);
-        routes = new HashMap<>();
+        routes = new LinkedHashMap<>();
         httpHandler = new HttpHandler(routes);
         threadPool = Executors.newFixedThreadPool(100);
 
