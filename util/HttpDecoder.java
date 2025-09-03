@@ -1,9 +1,6 @@
 package util;
 
-import request.HttpMethod;
-import request.HttpRequest;
-import request.RequestBody;
-import request.RequestParams;
+import request.*;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -18,29 +15,38 @@ public class HttpDecoder {
         System.out.println("REQUEST:");
 
         String[] requestParts = message.getFirst().split(" ");
-        if(requestParts.length != 3) return Optional.empty();
+
+        if(requestParts.length != 3 || !requestParts[2].equals("HTTP/1.1")) return Optional.empty();
+
+
 
         HttpMethod httpMethod = HttpMethod.valueOf(requestParts[0]);
+
         String uri = requestParts[1];
 
-        RouteMatchResult result = matchAndParsePath(httpMethod,uri,routes);
+        RouteMatchResult result = decodeRequestUrl(httpMethod,uri,routes);
         if( result == null )  return Optional.empty();
 
-        RequestBody body = null;
-        RequestParams params = new RequestParams(result.params());
+
+
+        PathParams pathParams = new PathParams(result.pathParams());
+        QueryParams queryParams = new QueryParams(result.queryParams());
         String matchedRoute = result.matchedRoute();
+
         System.out.println("ROUTE: "+matchedRoute);
         System.out.println("URI: "+uri);
-        System.out.println("PARAMS: "+params.params());
+        System.out.println("PATH PARAMS: "+pathParams.params());
+        System.out.println("QUERY PARAMS: "+queryParams.params());
 
-        if( !requestParts[2].equals("HTTP/1.1") ) return Optional.empty();
+
 
         Map<String,List<String>> requestHeader = new HashMap<>();
+        RequestBody body = null;
+        Cookie cookie = new Cookie();
 
         for(int i = 1 ; i < message.size() ; i++)
         {
             String str = message.get(i);
-
             int colonIndex = str.indexOf(":");
             if(colonIndex == -1) break;
             String name = str.substring(0,colonIndex).trim();
@@ -49,10 +55,18 @@ public class HttpDecoder {
             if(name.equalsIgnoreCase("Body"))
             {
                 body = decodeRequestBody(valuesStr);
+                continue;
             }
+            if(name.equalsIgnoreCase("Cookie"))
+            {
+                cookie.setCookieMap(getCookies(valuesStr));
+                continue;
+            }
+
 
             String[] values = valuesStr.split(",");
             List<String> headerTypeValues = requestHeader.computeIfAbsent(name, k -> new ArrayList<>());
+
             for (String value : values) {
                 headerTypeValues.add(value.trim());
             }
@@ -65,8 +79,10 @@ public class HttpDecoder {
                 .setUri(new URI(uri))
                 .setRequestHeader(requestHeader)
                 .setBody(body)
-                .setRequestParams(params)
-                .setMatchedRoute(matchedRoute);
+                .setPathParams(pathParams)
+                .setQueryParams(queryParams)
+                .setMatchedRoute(matchedRoute)
+                .setCookie(cookie);
 
         HttpRequest request = builder.build();
 
@@ -76,75 +92,87 @@ public class HttpDecoder {
 
     }
 
-    private static RouteMatchResult matchAndParsePath(HttpMethod httpMethod,String uri,Set<String> routes) {
+    private static Map<String, String> getCookies(String valuesStr) {
 
-
-        Map<String,List<String>> params = new HashMap<>();
-        String[] uriParts = uri.split("\\?",2);
-        String path = uriParts[0];
-
-        String query = uriParts.length < 2 ? "" : uriParts[1];
-        parseQuery(params,query);
-
-        String originalPath =  parsePath(params,httpMethod,path,routes);
-        if(originalPath == null) return null;
-
-        return new RouteMatchResult(originalPath,params);
-    }
-
-    private static String parsePath(Map<String, List<String>> params,HttpMethod httpMethod, String path, Set<String> routes) {
-
-
-        if (routes.contains(httpMethod.name() + "::" + path)) return httpMethod.name() + "::" + path;
-
-
-        for (String route : routes) {
-            String[] routeParts = route.split("::", 2);
-            String method = routeParts[0].trim();
-            String routePath = routeParts[1].trim();
-
-            if (!method.equals(httpMethod.name())) continue;
-
-            String[] pathParts = path.split("/");
-            String[] routePathParts = routePath.split("/");
-            if (path.startsWith("/")) pathParts = Arrays.copyOfRange(pathParts, 1, pathParts.length);
-            if (routePath.startsWith("/"))
-                routePathParts = Arrays.copyOfRange(routePathParts, 1, routePathParts.length);
-
-            if (pathParts.length == routePathParts.length) {
-                Map<String, List<String>> temp = new HashMap<>();
-                boolean flag = true;
-                for (int i = 0; i < pathParts.length; i++) {
-
-                    if (!pathParts[i].equals(routePathParts[i])) {
-                        if (routePathParts[i].startsWith("{")) {
-                            String key = routePathParts[i].substring(1, routePathParts[i].length() - 1);
-
-                            temp.computeIfAbsent(key, (k) -> new ArrayList<>()).add(pathParts[i]);
-
-                        } else {
-                            flag = false;
-                            break;
-                        }
-
-                    }
-                }
-                if (flag) {
-                    for (Map.Entry<String, List<String>> entry : temp.entrySet()) {
-                        String key = entry.getKey();
-                        List<String> value = entry.getValue();
-                        params.computeIfAbsent(key, (k) -> new ArrayList<>());
-                        List<String> sourceList = params.get(key);
-                        sourceList.addAll(value);
-                    }
-                    return route;
-                }
-
-            }
+        String[] pairs = valuesStr.split(";");
+        Map<String,String> cookies = new HashMap<>();
+        for(String pair:pairs)
+        {
+            pair = pair.trim();
+            if (pair.isEmpty()) continue;
+            String[] splited = pair.split("=", 2);
+            String key = splited[0].trim();
+            String value = splited.length > 1 ? splited[1].trim() : "";
+            cookies.put(key, value);
 
         }
+        return cookies;
+    }
 
-    return null;
+    private static RouteMatchResult decodeRequestUrl(HttpMethod httpMethod,String uri,Set<String> routes) {
+
+
+        Map<String,List<String>> queryParams = new HashMap<>();
+        Map<String,String> pathParams = new HashMap<>();
+        String[] uriParts = uri.split("\\?",2);
+
+        String path = uriParts[0];
+        String query = uriParts.length < 2 ? "" : uriParts[1];
+
+        String matchedRoute =  parsePath(pathParams,httpMethod,getNormalizedURL(path),routes);
+        parseQuery(queryParams,query);
+
+        if(matchedRoute == null) return null;
+
+        return new RouteMatchResult(matchedRoute,queryParams,pathParams);
+    }
+
+    private static String parsePath(Map<String, String> params, HttpMethod httpMethod, String path, Set<String> routes) {
+        String candidate = httpMethod.name() + "::" + path;
+
+        if (routes.contains(candidate)) {
+            return candidate;
+        }
+
+        String[] pathParts = path.split("/");
+
+        for (String route : routes) {
+
+            String[] routeParts = route.split("::", 2);
+            if (!routeParts[0].equals(httpMethod.name())) continue;
+
+            String[] routePathParts = routeParts[1].split("/");
+
+            if (pathParts.length != routePathParts.length) continue;
+
+            Map<String, String> temp = new HashMap<>();
+            boolean matched = true;
+
+            for (int i = 0; i < pathParts.length; i++) {
+                String actual = pathParts[i];
+                String expected = routePathParts[i];
+
+                if (expected.isEmpty() && actual.isEmpty()) continue;
+
+                if (expected.equals(actual)) {
+                } else if (expected.startsWith("{") && expected.endsWith("}")) {
+                    String key = expected.substring(1, expected.length() - 1);
+                    temp.put(key, actual);
+                } else if (expected.equals("*")) {
+                    continue;
+                } else {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched) {
+                params.putAll(temp);
+                return route;
+            }
+        }
+
+        return null;
     }
 
     private static void parseQuery(Map<String, List<String>> params,String query) {
@@ -232,7 +260,7 @@ public class HttpDecoder {
     private static DataType findDataType(String part) {
 
         if(part.equalsIgnoreCase("null")) return DataType.NULL;
-        if(part.charAt(0) == '"' && part.charAt(part.length()-1) == '"')
+        if(part.startsWith("\"") && part.endsWith( "\""))
             return DataType.STRING;
         if(part.startsWith("[") && part.endsWith("]")) return DataType.ARRAY;
         if(part.startsWith("{")&& part.endsWith("}")) return DataType.OBJECT;
@@ -246,6 +274,8 @@ public class HttpDecoder {
         }
     }
     public static List<String> splitTopLevel(String input, char delimiter) {
+
+
         List<String> result = new ArrayList<>();
         int depth = 0;
         boolean inString = false;
@@ -274,6 +304,39 @@ public class HttpDecoder {
         if (!current.isEmpty()) result.add(current.toString().trim());
 
         return result;
+    }
+
+    public static String getNormalizedURL(String url)
+    {
+        StringBuilder normalizedUrl = new StringBuilder();
+        int i = 0 , n = url.length();
+        boolean flag = true;
+        while(i < n)
+        {
+            if(url.charAt(i) == '/')
+            {
+                if(flag)
+                {
+                    normalizedUrl.append( "/");
+                    flag = false;
+                }
+
+            }
+            else {
+                flag = true;
+                normalizedUrl.append(url.charAt(i));
+            }
+            i++;
+        }
+        if(normalizedUrl.charAt(0) != '/')
+        {
+            normalizedUrl.insert(0,"/");
+        }
+        if(normalizedUrl.length() > 1 && normalizedUrl.charAt(normalizedUrl.length()-1) == '/')
+        {
+            normalizedUrl.deleteCharAt(normalizedUrl.length()-1);
+        }
+        return normalizedUrl.toString();
     }
 
 }

@@ -1,6 +1,7 @@
 package request;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -13,7 +14,9 @@ public class HttpRequest
     private final String matchedRoute;
     private final Map<String, List<String>> requestHeader;
     private final RequestBody requestBody;
-    private final RequestParams requestParams;
+    private final PathParams pathParams;
+    private final QueryParams queryParams;
+    private final Cookie cookie;
 
 
     private HttpRequest(Builder builder)
@@ -22,8 +25,10 @@ public class HttpRequest
         this.requestHeader = builder.requestHeader;
         this.uri = builder.uri;
         this.requestBody = builder.requestBody;
-        this.requestParams = builder.requestParams;
+        this.pathParams = builder.pathParams;
+        this.queryParams = builder.queryParams;
         this.matchedRoute = builder.matchedRoute;
+        this.cookie = builder.cookie;
     }
 
 
@@ -43,71 +48,97 @@ public class HttpRequest
     {
         return this.requestHeader;
     }
+
     public RequestBody getRequestBody()
     {
         if(!hasBody()) throw new IllegalStateException("This Request Does not have a Body!");
         return this.requestBody;
     }
-    public RequestParams getRequestParams()
+    public PathParams getPathParams()
     {
-        if(!hasParams()) throw new IllegalStateException("This Request Does not hold Parameter values!");
-        return this.requestParams;
+        return this.pathParams;
     }
+
+    public QueryParams getQueryParams()
+    {
+        return this.queryParams;
+    }
+
+
     public boolean hasBody()
     {
         return this.requestBody != null;
     }
-    public boolean hasParams()
+
+    public Cookie getCookie()
     {
-        return this.requestParams !=null ;
+        return this.cookie;
     }
-    public static class Builder
-    {
-        private HttpMethod httpMethod;
-        private URI uri;
-        private Map<String, List<String>> requestHeader;
-        private RequestBody requestBody;
-        private RequestParams requestParams;
-        private  String matchedRoute;
 
-        public Builder()
-        {
-        }
-        public Builder setHttpMethod(HttpMethod httpMethod)
-        {
-           this.httpMethod = httpMethod;
-           return this;
-        }
-        public Builder setUri(URI uri)
-        {
-            this.uri = uri;
-            return this;
-        }
-        public Builder setRequestHeader(Map<String, List<String>> requestHeader)
-        {
-            this.requestHeader = requestHeader;
-            return this;
-        }
-        public Builder setBody(RequestBody body)
-        {
-            this.requestBody = body;
-            return this;
-        }
-        public HttpRequest build()
-        {
-            return new HttpRequest(this);
-        }
+                public static class Builder
+                {
+                    private HttpMethod httpMethod;
+                    private URI uri;
+                    private Map<String, List<String>> requestHeader;
+                    private RequestBody requestBody;
+                    private PathParams pathParams = new PathParams(new HashMap<>());
+                    private QueryParams queryParams = new QueryParams((new HashMap<>()));
+                    private String matchedRoute;
+                    private Cookie cookie = new Cookie();
 
-        public Builder setRequestParams(RequestParams requestParams) {
-            this.requestParams = requestParams;
-            return this;
-        }
+                    public Builder()
+                    {
+                    }
+                    public Builder setHttpMethod(HttpMethod httpMethod)
+                    {
+                       this.httpMethod = httpMethod;
+                       return this;
+                    }
+                    public Builder setUri(URI uri)
+                    {
+                        this.uri = uri;
+                        return this;
+                    }
 
-        public Builder setMatchedRoute(String matchedRoute) {
-            this.matchedRoute = matchedRoute;
-            return this;
-        }
-    }
+                    public Builder setRequestHeader(Map<String, List<String>> requestHeader)
+                    {
+                        this.requestHeader = requestHeader;
+                        return this;
+                    }
+                    public Builder setBody(RequestBody body)
+                    {
+                        this.requestBody = body;
+                        return this;
+                    }
+
+                    public Builder setCookie(Cookie cookie)
+                    {
+                        this.cookie = cookie;
+                        return this;
+                    }
+
+                   public Builder setQueryParams(QueryParams queryParams)
+                   {
+                       this.queryParams = queryParams;
+                       return this;
+                   }
+                   public Builder setPathParams(PathParams pathParams)
+                   {
+                       this.pathParams = pathParams;
+                       return this;
+                   }
+
+                    public Builder setMatchedRoute(String matchedRoute) {
+                        this.matchedRoute = matchedRoute;
+                        return this;
+                    }
+
+                    public HttpRequest build()
+                    {
+                        return new HttpRequest(this);
+                    }
+
+                }
 
 
 }

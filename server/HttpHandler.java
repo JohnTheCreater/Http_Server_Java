@@ -37,8 +37,16 @@ public class HttpHandler {
         catch (Exception e)
         {
 
-            handleInValidRequest(outputStream);
-            throw e;
+            System.err.println("An unexpected exception occurred while handling a connection:");
+            e.printStackTrace();
+
+            try {
+                handleInternalServerError(outputStream);
+            } catch (IOException ioException) {
+
+                System.err.println("Failed to send 500 error response: " + ioException.getMessage());
+            }
+
         }
 
     }
@@ -63,6 +71,15 @@ public class HttpHandler {
 
         HttpResponse response = resBuilder.build();
         ResponseWriter.write(out,response);
+    }
+
+    public void handleInternalServerError(OutputStream out) throws IOException {
+        HttpResponse.Builder resBuilder = new HttpResponse.Builder()
+                .withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                .withBody("<h1>500 Internal Server Error</h1><p>Something went wrong on the server.</p>");
+
+        HttpResponse response = resBuilder.build();
+        ResponseWriter.write(out, response);
     }
 
     private List<String> readRequestInfo(InputStream inputStream) throws IOException {
@@ -93,8 +110,6 @@ public class HttpHandler {
             String requestBody = new String(bodyChars);
             message.add("Body:" + requestBody);
         }
-
-
 
 
         return message;

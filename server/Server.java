@@ -1,6 +1,7 @@
 package server;
 
 import request.HttpMethod;
+import util.HttpDecoder;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -31,7 +32,7 @@ public class Server {
                 Socket client = serverSocket.accept();
                 handleConnection(client);
             } catch (SocketException e) {
-                break; // stopped
+                break;
             }
         }
     }
@@ -55,23 +56,23 @@ public class Server {
 
     public void get(String route,RouteRunner runner)
     {
-        routes.put(HttpMethod.GET.name()+"::"+route,runner);
+        routes.put(HttpMethod.GET.name()+"::"+ HttpDecoder.getNormalizedURL(route),runner);
     }
     public void post(String route,RouteRunner runner)
     {
-        routes.put(HttpMethod.POST.name()+"::"+route,runner);
+        routes.put(HttpMethod.POST.name()+"::"+HttpDecoder.getNormalizedURL(route),runner);
     }
     public void put(String route,RouteRunner runner)
     {
-        routes.put(HttpMethod.PUT.name()+"::"+route,runner);
+        routes.put(HttpMethod.PUT.name()+"::"+HttpDecoder.getNormalizedURL(route),runner);
     }
     public void patch(String route,RouteRunner runner)
     {
-        routes.put(HttpMethod.PATCH.name()+"::"+route,runner);
+        routes.put(HttpMethod.PATCH.name()+"::"+HttpDecoder.getNormalizedURL(route),runner);
     }
     public void delete(String route,RouteRunner runner)
     {
-        routes.put(HttpMethod.DELETE.name()+"::"+route,runner);
+        routes.put(HttpMethod.DELETE.name()+"::"+HttpDecoder.getNormalizedURL(route),runner);
     }
 
 
